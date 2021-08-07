@@ -1,6 +1,7 @@
 import os
 import re
 from typing import NamedTuple
+
 # TODO: refactor, one thing, see if _eat can be called before handling the lexical
 
 LET_STATEMENT = "letStatement"
@@ -31,7 +32,7 @@ IF = "if"
 ELSE = "else"
 WHILE = "while"
 RETURN = "return"
-## Symbols
+# Symbols
 LEFT_BRACE = "{"
 RIGHT_BRACE = "}"
 LEFT_PAREN = "("
@@ -43,7 +44,7 @@ COMMA = ","
 SEMI_COLON = ";"
 PLUS = "+"
 MINUS = "-"
-ASTERIK = "*"
+ASTERISK = "*"
 FORWARD_SLASH = "/"
 AMPERSAND = "&"
 PIPE = "|"
@@ -89,8 +90,8 @@ class JackTokenizer:
         ]),
         symbol="|".join([
             "\{", "\}", "\(", "\)", "\[", "\]", "\.",
-            "\,", "\;", "\+", "\-", "\*", "\/", "\&"
-                                                "\|", "\<", "\>", "\=", "\~",
+            "\,", "\;", "\+", "\-", "\*", "\/", "\&",
+            "\|", "\<", "\>", "\=", "\~",
         ]),
         integerConstant=r"\d+",
         stringConstant=r'\"[^"\n]+\"',  # unicode characters
@@ -166,10 +167,10 @@ class CompilationEngine:
         INVARIANT: current_token is the token we are handling now given _eat() is last to run in handling it
         Args:
             tokens_stream (Generator): Generator of jack tokens
-            out_stream (str): file to write parsed jack code into
+            out_stream (stream): file to write parsed jack code into
         """
-        self.tokensStream = tokens_stream
-        self.outFileStream = out_stream
+        self.tokens_stream = tokens_stream
+        self.out_stream = out_stream
         self.current_token = None
         self.indent_level = 0
 
@@ -181,7 +182,7 @@ class CompilationEngine:
         """
         value = self.special_xml.get(value, value)
         indent = "\t" * self.indent_level  # followed the test files format (seems arbitrary though)
-        self.outFileStream.write(f"{indent}<{tag}> {value} </{tag}>{NEWLINE}")
+        self.out_stream.write(f"{indent}<{tag}> {value} </{tag}>{NEWLINE}")
 
     def _write_open_tag(self, tag):
         """writes xml open tag with given tag
@@ -189,7 +190,7 @@ class CompilationEngine:
             tag (str): xml tag
         """
         indent = "\t" * self.indent_level
-        self.outFileStream.write(f"{indent}<{tag}>{NEWLINE}")
+        self.out_stream.write(f"{indent}<{tag}>{NEWLINE}")
 
     def _write_close_tag(self, tag):
         """writes xml close tag with given tag
@@ -197,7 +198,7 @@ class CompilationEngine:
             tag (str): xml tag
         """
         indent = "\t" * self.indent_level
-        self.outFileStream.write(f"{indent}</{tag}>{NEWLINE}")
+        self.out_stream.write(f"{indent}</{tag}>{NEWLINE}")
 
     def _eat(self, s):
         """advance to next token if given string is same as the current token, otherwise raise error
@@ -209,8 +210,8 @@ class CompilationEngine:
         if s == self.current_token.value or \
                 (s == self.current_token.type and s in [INT_CONSTANT, STR_CONSTANT, IDENTIFIER]):
             try:
-                self.current_token = next(self.tokensStream)
-            except StopIteration as e:
+                self.current_token = next(self.tokens_stream)
+            except StopIteration:
                 if s != RIGHT_BRACE:  # last token
                     raise ParseException("Error, reached end of file")
         else:
@@ -221,7 +222,10 @@ class CompilationEngine:
         """Starting point in compiling a jack source file
         """
         # first token
-        self.current_token = self.current_token or next(self.tokensStream)
+        try:
+            self.current_token = self.current_token or next(self.tokens_stream)
+        except StopIteration:  # jack source file is empty
+            return
 
         # <class>
         self._write_open_tag(CLASS)
@@ -367,7 +371,8 @@ class CompilationEngine:
 
             self._write_tag_value(IDENTIFIER, self.current_token.value)
             self._eat(IDENTIFIER)
-            if not self.current_token.value == COMMA: break
+            if not self.current_token.value == COMMA:
+                break
 
         self.indent_level -= 1
         self._write_close_tag(PARAMETER_LIST)
@@ -435,7 +440,7 @@ class CompilationEngine:
         self._write_open_tag(LET_STATEMENT)
         self.indent_level += 1
 
-        # let
+        # let - TODO: confirm its rule, not sure about it
         self._write_tag_value(KEYWORD, LET)
         self._eat(LET)
 
@@ -446,8 +451,6 @@ class CompilationEngine:
         # <letStatement>
         self.indent_level -= 1
         self._write_close_tag(LET_STATEMENT)
-
-
 
     def compile_if_statement(self):
         return
@@ -477,16 +480,17 @@ if __name__ == "__main__":
     #     sys.exit(1)
     # inFilePath = sys.argv[1]
 
-    inFilePath = r"C:\Users\khalil\OneDrive - Deakin University\PhD Project\Programming\CSDegree\019_020_NAND_TETRIS\projects\10\ArrayTest\Temp.jack"
+    inFilePath = r"C:\Users\khalil\OneDrive - Deakin University\PhD " \
+                 r"Project\Programming\CSDegree\019_020_NAND_TETRIS\projects\10\ArrayTest\Temp.jack "
 
 
     def handle_file(path):
-        outFilePath = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
+        out_file_path = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
         with open(path) as inFileStream:
-            with open(outFilePath, "w") as outFileStream:
-                tokensStream = JackTokenizer(inFileStream).start_tokenizer()
-                compilationEngine = CompilationEngine(tokensStream, outFileStream)
-                compilationEngine.compile_class()
+            with open(out_file_path, "w") as outFileStream:
+                tokens_stream = JackTokenizer(inFileStream).start_tokenizer()
+                compilation_engine = CompilationEngine(tokens_stream, outFileStream)
+                compilation_engine.compile_class()
 
 
     def handle_dir(path):
