@@ -4,6 +4,7 @@ import sys
 from typing import NamedTuple
 
 # TODO: refactor, one thing, see if _eat can be called before handling the lexical
+# TODO: add exceptions everywhere, so far assumed syntactically correct jack source code
 
 IN_FILE_EXT = ".jack"
 OUT_FILE_EXT = "_test.xml"
@@ -106,7 +107,6 @@ class JackTokenizer:
 
     def __init__(self, in_stream):
         self.in_stream = in_stream
-        self._current_token = None
 
     def start_tokenizer(self):
         line_number = 0
@@ -146,6 +146,14 @@ class CompilationEngine:
         self.current_token = None
         self.indent_level = 0
 
+    @property
+    def current_token_value(self):
+        return self.current_token.value
+
+    @property
+    def current_token_type(self):
+        return self.current_token.type
+
     def _write_tag_value(self, tag, value):
         """writes xml tagged jack token to outFileStream
         Args:
@@ -179,8 +187,8 @@ class CompilationEngine:
         Raises:
             ParseException: in case no match
         """
-        if s == self.current_token.value or \
-                (s == self.current_token.type and s in [INT_CONSTANT, STR_CONSTANT, IDENTIFIER]):
+        if s == self.current_token_value or \
+                (s == self.current_token_type and s in [INT_CONSTANT, STR_CONSTANT, IDENTIFIER]):
             try:
                 self.current_token = next(self.tokens_stream)
             except StopIteration:
@@ -189,7 +197,7 @@ class CompilationEngine:
         else:
             raise ParseException(
                 f"Got wrong token in line {self.current_token.line_number}: "
-                f"{self.current_token.value}, expected: {s!r}\n{str(self.current_token)}")
+                f"{self.current_token_value}, expected: {s!r}\n{str(self.current_token)}")
 
     def compile_class(self):
         """Starting point in compiling a jack source file
@@ -205,27 +213,27 @@ class CompilationEngine:
         self.indent_level += 1
 
         # class
-        self._write_tag_value(KEYWORD, self.current_token.value)
+        self._write_tag_value(KEYWORD, self.current_token_value)
         self._eat(CLASS)
 
         # className
-        self._write_tag_value(IDENTIFIER, self.current_token.value)
+        self._write_tag_value(IDENTIFIER, self.current_token_value)
         self._eat(IDENTIFIER)
 
         # {
-        self._write_tag_value(SYMBOL, self.current_token.value)
+        self._write_tag_value(SYMBOL, self.current_token_value)
         self._eat(LEFT_BRACE)
 
         # classVarDec*
-        while self.current_token.value in [STATIC, FIELD]:
+        while self.current_token_value in [STATIC, FIELD]:
             self.compile_class_var_dec()
 
         # subroutineDec*
-        while self.current_token.value in [CONSTRUCTOR, FUNCTION, METHOD]:
+        while self.current_token_value in [CONSTRUCTOR, FUNCTION, METHOD]:
             self.compile_subroutine_dec()
 
         # }
-        self._write_tag_value(SYMBOL, self.current_token.value)
+        self._write_tag_value(SYMBOL, self.current_token_value)
         self._eat(RIGHT_BRACE)
 
         # </class>
@@ -241,12 +249,11 @@ class CompilationEngine:
         self.indent_level += 1
 
         # field | static
-        self._write_tag_value(KEYWORD, self.current_token.value)
-        if self.current_token.value == STATIC:
-            self._eat(STATIC)
-        elif self.current_token.value == FIELD:
-            self._eat(FIELD)
+        self._write_tag_value(KEYWORD, self.current_token_value)
+        if self.current_token_value in (STATIC, FIELD):
+            self._eat(self.current_token_value)
 
+        # varName
         self._handle_type_var_name()
 
         # </classVarDec>
@@ -255,18 +262,18 @@ class CompilationEngine:
 
     def _handle_type_var_name(self):
         # type
-        if self.current_token.value in [INT, CHAR, BOOLEAN]:
-            self._write_tag_value(KEYWORD, self.current_token.value)
-            self._eat(self.current_token.value)
-        elif self.current_token.type == IDENTIFIER:
-            self._write_tag_value(IDENTIFIER, self.current_token.value)
+        if self.current_token_value in [INT, CHAR, BOOLEAN]:
+            self._write_tag_value(KEYWORD, self.current_token_value)
+            self._eat(self.current_token_value)
+        elif self.current_token_type == IDENTIFIER:
+            self._write_tag_value(IDENTIFIER, self.current_token_value)
             self._eat(IDENTIFIER)
 
         # varName (, varName)*;
         while True:
-            self._write_tag_value(IDENTIFIER, self.current_token.value)
+            self._write_tag_value(IDENTIFIER, self.current_token_value)
             self._eat(IDENTIFIER)
-            if self.current_token.value == SEMI_COLON:
+            if self.current_token_value == SEMI_COLON:
                 break
             self._write_tag_value(SYMBOL, COMMA)
             self._eat(COMMA)
@@ -282,35 +289,31 @@ class CompilationEngine:
         self.indent_level += 1
 
         # constructor | function | method
-        self._write_tag_value(KEYWORD, self.current_token.value)
-        if self.current_token.value == CONSTRUCTOR:
-            self._eat(CONSTRUCTOR)
-        elif self.current_token.value == FUNCTION:
-            self._eat(FUNCTION)
-        elif self.current_token.value == METHOD:
-            self._eat(METHOD)
+        self._write_tag_value(KEYWORD, self.current_token_value)
+        if self.current_token_value in (CONSTRUCTOR, FUNCTION, METHOD):
+            self._eat(self.current_token_value)
 
         # void | type
-        if self.current_token.value in [VOID, INT, CHAR, BOOLEAN]:
-            self._write_tag_value(KEYWORD, self.current_token.value)
-            self._eat(self.current_token.value)
-        elif self.current_token.type == IDENTIFIER:
-            self._write_tag_value(IDENTIFIER, self.current_token.value)
+        if self.current_token_value in (VOID, INT, CHAR, BOOLEAN):
+            self._write_tag_value(KEYWORD, self.current_token_value)
+            self._eat(self.current_token_value)
+        elif self.current_token_type == IDENTIFIER:
+            self._write_tag_value(IDENTIFIER, self.current_token_value)
             self._eat(IDENTIFIER)
 
         # subroutineName
-        self._write_tag_value(IDENTIFIER, self.current_token.value)
+        self._write_tag_value(IDENTIFIER, self.current_token_value)
         self._eat(IDENTIFIER)
 
         # (
-        self._write_tag_value(SYMBOL, self.current_token.value)
+        self._write_tag_value(SYMBOL, self.current_token_value)
         self._eat(LEFT_PAREN)
 
         # parameterList
         self.compile_parameter_list()
 
         # )
-        self._write_tag_value(SYMBOL, self.current_token.value)
+        self._write_tag_value(SYMBOL, self.current_token_value)
         self._eat(RIGHT_PAREN)
 
         # subroutineBody
@@ -329,18 +332,18 @@ class CompilationEngine:
 
         # ((type varName) (, type varName)*)?
         while True:
-            if self.current_token.value in [INT, CHAR, BOOLEAN]:
-                self._write_tag_value(KEYWORD, self.current_token.value)
-                self._eat(self.current_token.value)
-            elif self.current_token.type == IDENTIFIER:
-                self._write_tag_value(IDENTIFIER, self.current_token.value)
+            if self.current_token_value in [INT, CHAR, BOOLEAN]:
+                self._write_tag_value(KEYWORD, self.current_token_value)
+                self._eat(self.current_token_value)
+            elif self.current_token_type == IDENTIFIER:
+                self._write_tag_value(IDENTIFIER, self.current_token_value)
                 self._eat(IDENTIFIER)
             else:
                 break
 
-            self._write_tag_value(IDENTIFIER, self.current_token.value)
+            self._write_tag_value(IDENTIFIER, self.current_token_value)
             self._eat(IDENTIFIER)
-            if not self.current_token.value == COMMA:
+            if not self.current_token_value == COMMA:
                 break
             self._write_tag_value(SYMBOL, COMMA)
             self._eat(COMMA)
@@ -359,7 +362,7 @@ class CompilationEngine:
         self._write_tag_value(SYMBOL, LEFT_BRACE)
         self._eat(LEFT_BRACE)
 
-        while self.current_token.value == VAR:  # order matters, simplify
+        while self.current_token_value == VAR:  # order matters, simplify
             self.compile_var_dec()
 
         self.compile_statements()
@@ -380,7 +383,7 @@ class CompilationEngine:
         self.indent_level += 1
 
         # VAR
-        self._write_tag_value(KEYWORD, self.current_token.value)
+        self._write_tag_value(KEYWORD, self.current_token_value)
         self._eat(VAR)
 
         # type varName (',' varName)*;
@@ -398,14 +401,14 @@ class CompilationEngine:
         self._write_open_tag("statements")
         self.indent_level += 1
 
-        while self.current_token.value in [LET, IF, WHILE, DO, RETURN]:
+        while self.current_token_value in [LET, IF, WHILE, DO, RETURN]:
             {
                 LET: self.compile_let_statement,
                 IF: self.compile_if_statement,
                 WHILE: self.compile_while_statement,
                 DO: self.compile_do_statement,
                 RETURN: self.compile_return_statement,
-            }[self.current_token.value]()
+            }[self.current_token_value]()
 
         # </statements>
         self.indent_level -= 1
@@ -424,11 +427,11 @@ class CompilationEngine:
         self._eat(LET)
 
         # varName
-        self._write_tag_value(IDENTIFIER, self.current_token.value)
+        self._write_tag_value(IDENTIFIER, self.current_token_value)
         self._eat(IDENTIFIER)
 
         # ( '[' expression ']')?
-        if self.current_token.value == LEFT_BRACKET:
+        if self.current_token_value == LEFT_BRACKET:
             self._write_tag_value(SYMBOL, LEFT_BRACKET)
             self._eat(LEFT_BRACKET)
             self.compile_expression()
@@ -469,7 +472,7 @@ class CompilationEngine:
         # {statements}
         self._handle_statements_within_braces()
 
-        if self.current_token.value == ELSE:
+        if self.current_token_value == ELSE:
             self._write_tag_value(KEYWORD, ELSE)
             self._eat(ELSE)
             self._handle_statements_within_braces()
@@ -493,7 +496,7 @@ class CompilationEngine:
         self._write_tag_value(SYMBOL, LEFT_BRACE)
         self._eat(LEFT_BRACE)
         # statements
-        while self.current_token.value in [LET, IF, WHILE, DO, RETURN]:
+        while self.current_token_value in [LET, IF, WHILE, DO, RETURN]:
             self.compile_statements()
         # }
         self._write_tag_value(SYMBOL, RIGHT_BRACE)
@@ -536,13 +539,13 @@ class CompilationEngine:
         self._eat(DO)
 
         #  subroutineName | (className | varName)'.'subroutineName
-        self._write_tag_value(IDENTIFIER, self.current_token.value)
+        self._write_tag_value(IDENTIFIER, self.current_token_value)
         self._eat(IDENTIFIER)
         # check if '.'
-        if self.current_token.value == DOT:
+        if self.current_token_value == DOT:
             self._write_tag_value(SYMBOL, DOT)
             self._eat(DOT)
-            self._write_tag_value(IDENTIFIER, self.current_token.value)
+            self._write_tag_value(IDENTIFIER, self.current_token_value)
             self._eat(IDENTIFIER)
 
         # (expressionList)
@@ -569,7 +572,7 @@ class CompilationEngine:
         self._eat(RETURN)
 
         # expression?
-        if self.current_token.value != SEMI_COLON:
+        if self.current_token_value != SEMI_COLON:
             self.compile_expression()
 
         # ;
@@ -593,9 +596,9 @@ class CompilationEngine:
         self.compile_term()
 
         # (op term)*
-        while self.current_token.value in OP:
-            self._write_tag_value(SYMBOL, self.current_token.value)
-            self._eat(self.current_token.value)
+        while self.current_token_value in OP:
+            self._write_tag_value(SYMBOL, self.current_token_value)
+            self._eat(self.current_token_value)
             self.compile_term()
 
         # </expression>
@@ -611,25 +614,25 @@ class CompilationEngine:
         self._write_open_tag("term")
         self.indent_level += 1
 
-        if self.current_token.type == INT_CONSTANT:
-            self._write_tag_value("integerConstant", self.current_token.value)
+        if self.current_token_type == INT_CONSTANT:
+            self._write_tag_value("integerConstant", self.current_token_value)
             self._eat(INT_CONSTANT)
-        elif self.current_token.type == STR_CONSTANT:
-            self._write_tag_value("stringConstant", self.current_token.value.strip("\""))
+        elif self.current_token_type == STR_CONSTANT:
+            self._write_tag_value("stringConstant", self.current_token_value.strip("\""))
             self._eat(STR_CONSTANT)
-        elif self.current_token.value in KEYWORD_CONSTANT:
-            self._write_tag_value(KEYWORD, self.current_token.value)
-            self._eat(self.current_token.value)
-        elif self.current_token.value in UNARY_OP:
-            self._write_tag_value(SYMBOL, self.current_token.value)
-            self._eat(self.current_token.value)
+        elif self.current_token_value in KEYWORD_CONSTANT:
+            self._write_tag_value(KEYWORD, self.current_token_value)
+            self._eat(self.current_token_value)
+        elif self.current_token_value in UNARY_OP:
+            self._write_tag_value(SYMBOL, self.current_token_value)
+            self._eat(self.current_token_value)
             self.compile_term()
-        elif self.current_token.value == LEFT_PAREN:  # '(' expression ')'
+        elif self.current_token_value == LEFT_PAREN:  # '(' expression ')'
             self._handle_expr_or_expr_list_within_paren(self.compile_expression)
         else:  # identifier
-            current_token_value = self.current_token.value
+            current_token_value = self.current_token_value
             self._eat(IDENTIFIER)
-            next_token_value = self.current_token.value
+            next_token_value = self.current_token_value
 
             # varName'[' expression ']'
             if next_token_value == LEFT_BRACKET:
@@ -644,7 +647,7 @@ class CompilationEngine:
                 self._write_tag_value(IDENTIFIER, current_token_value)
                 self._write_tag_value(SYMBOL, DOT)
                 self._eat(DOT)
-                self._write_tag_value(IDENTIFIER, self.current_token.value)
+                self._write_tag_value(IDENTIFIER, self.current_token_value)
                 self._eat(IDENTIFIER)
                 self._handle_expr_or_expr_list_within_paren(self.compile_expression_list)
             # subroutineCall: bar(expressionList)
@@ -670,10 +673,10 @@ class CompilationEngine:
         self.indent_level += 1
 
         # (expression (',' expression)*)?
-        if not self.current_token.value == RIGHT_PAREN:
+        if not self.current_token_value == RIGHT_PAREN:
             while True:
                 self.compile_expression()
-                if not self.current_token.value == COMMA:
+                if not self.current_token_value == COMMA:
                     break
                 self._write_tag_value(SYMBOL, COMMA)
                 self._eat(COMMA)
@@ -698,12 +701,10 @@ if __name__ == "__main__":
                 compilation_engine = CompilationEngine(tokens_stream, outFileStream)
                 compilation_engine.compile_class()
 
-
     def handle_dir(path):
         for f in os.listdir(path):
             if f.endswith(IN_FILE_EXT):
                 handle_file(os.path.join(path, f))
-
 
     if os.path.isfile(inFilePath):
         handle_file(inFilePath)
