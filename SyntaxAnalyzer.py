@@ -51,27 +51,18 @@ LESS_THAN = "<"
 GREATER_THAN = ">"
 EQUAL_SIGN = "="
 TILDE = "~"
-# Other constants
-KEYWORD = "keyword"
-SYMBOL = "symbol"
+# other constants
+DOUBLE_QUOTES = "\""
 INT_CONSTANT = "integerConstant"
 STR_CONSTANT = "stringConstant"
 IDENTIFIER = "identifier"
-DOUBLE_QUOTES = "\""
-CLASS_VAR_DEC = "classVarDec"
-SUBROUTINE_DEC = "subroutineDec"
-PARAMETER_LIST = "parameterList"
-SUBROUTINE_BODY = "subroutineBody"
-VAR_DEC = "varDec"
-STATEMENTS = "statements"
-TERM = "term"
-EXPRESSION = "expression"
-EXPRESSION_LIST = "expressionList"
-RETURN_STATEMENT = "returnStatement"
-DO_STATEMENT = "doStatement"
-WHILE_STATEMENT = "whileStatement"
-IF_STATEMENT = "ifStatement"
-LET_STATEMENT = "letStatement"
+KEYWORD = "keyword"
+SYMBOL = "symbol"
+
+UNARY_OP = (MINUS, TILDE)
+OP = (PLUS, MINUS, ASTERISK, FORWARD_SLASH, AMPERSAND,
+      PIPE, LESS_THAN, GREATER_THAN, EQUAL_SIGN)
+KEYWORD_CONSTANT = [TRUE, FALSE, NULL, THIS]
 
 
 class ParseException(Exception):
@@ -82,39 +73,36 @@ class Token(NamedTuple):
     type: str
     value: str
     line_number: int
-    line: str  # for debugging
-
-    def __repr__(self):
-        return f"{self.line!r}"
-
-    def __str__(self):
-        return self.__repr__()
 
 
 class JackTokenizer:
-    tokens_specifications = dict(
-        comment=r"//.*|/\*.*\*/",
-        space=r"[ \t]+",
-        keyword="|".join([
+    # Note, order of these specifications matter
+    tokens_specifications = {
+        "comment": r"//.*|/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/",
+        "space": r"[ \t]+",
+        "newline": r"\n",
+        KEYWORD: "|".join([
             "class", "constructor", "function",
             "method", "field", "static", "var", "int",
             "char", "boolean", "void", "true", "false",
             "null", "this", "let", "do", "if", "else",
             "while", "return"
         ]),
-        symbol="|".join([
-            "\{", "\}", "\(", "\)", "\[", "\]", "\.",
-            "\,", "\;", "\+", "\-", "\*", "\/", "\&",
-            "\|", "\<", "\>", "\=", "\~",
+        SYMBOL: "|".join([
+            r"\{", r"\}", r"\(", r"\)", r"\[", r"\]", r"\.",
+            r"\,", r"\;", r"\+", r"\-", r"\*", r"\/", r"\&",
+            r"\|", r"\<", r"\>", r"\=", r"\~",
         ]),
-        integerConstant=r"\d+",
-        stringConstant=r'\"[^"\n]+\"',  # unicode characters
-        identifier=r"[a-zA-Z_]{1}[a-zA-Z0-9_]*",  # must be after keywords, in python re site, considered keyword as
+        INT_CONSTANT: r"\d+",
+        STR_CONSTANT: r'\"[^"\n]+\"',  # unicode characters
+        IDENTIFIER: r"[a-zA-Z_]{1}[a-zA-Z0-9_]*",  # must be after keywords, in python re site, considered keyword as
         # part of ID pattern newline=r"\n",
-        mismatch=r".",  # any other character
-    )
-    jack_token = re.compile("|".join([r"(?P<{}>{})".format(token, specification)
-                                      for token, specification in tokens_specifications.items()]))
+        "mismatch": r".",  # any other character
+    }
+    jack_token = re.compile(
+        "|".join(
+            [r"(?P<{}>{})".format(token, specification)
+             for token, specification in tokens_specifications.items()]))
 
     def __init__(self, in_stream):
         self.in_stream = in_stream
@@ -122,50 +110,20 @@ class JackTokenizer:
 
     def start_tokenizer(self):
         line_number = 0
-        for line in self.in_stream:
-            line = line.strip()
-            line_number += 1
-            for m in self.jack_token.finditer(line):
-                token_type = m.lastgroup
-                token_value = m.group(token_type)
-                if token_type == "integerConstant":
-                    token_value = int(token_value)
-                # if token_type == "newline":
-                #    line_number += 1
-                if token_type == "comment" or token_type == "space":
-                    continue
-                elif token_type == "mismatch":
-                    raise ParseException(
-                        f"got wrong jack token: {token_value} in line {line_number}\n{str(line)}")
-                else:
-                    yield Token(token_type, token_value, line_number, line)
-
-    """
-    # I think won't be necessary 
-    @property
-    def current_token(self):
-        return self._current_token
-    def has_more_tokens(self):
-        return False
-
-    def token_type():
-        return
-
-    def keyword() -> str:
-        return
-
-    def symbol() -> str:
-        return
-
-    def identifier() -> str:
-        return
-
-    def int_val() -> int:
-        return
-
-    def str_val() -> str:
-        return
-    """
+        for m in self.jack_token.finditer(self.in_stream):
+            token_type = m.lastgroup
+            token_value = m.group(token_type)
+            if token_type == "integerConstant":
+                token_value = int(token_value)
+            elif token_type == "newline":
+                line_number += 1
+                continue
+            elif token_type in ("space", "comment"):
+                continue
+            elif token_type == "mismatch":
+                raise ParseException(
+                    f"got wrong jack token: {token_value} in line {line_number}")
+            yield Token(token_type, token_value, line_number)
 
 
 class CompilationEngine:
@@ -279,7 +237,7 @@ class CompilationEngine:
         ASSUME: only called if current token's value is static or field
         """
         # <classVarDec>
-        self._write_open_tag(CLASS_VAR_DEC)
+        self._write_open_tag("classVarDec")
         self.indent_level += 1
 
         # field | static
@@ -293,7 +251,7 @@ class CompilationEngine:
 
         # </classVarDec>
         self.indent_level -= 1
-        self._write_close_tag(CLASS_VAR_DEC)
+        self._write_close_tag("classVarDec")
 
     def _handle_type_var_name(self):
         # type
@@ -320,7 +278,7 @@ class CompilationEngine:
         ASSUME: only called if current token's value is constructor, function or method
         """
         # <subroutineDec>
-        self._write_open_tag(SUBROUTINE_DEC)
+        self._write_open_tag("subroutineDec")
         self.indent_level += 1
 
         # constructor | function | method
@@ -360,13 +318,13 @@ class CompilationEngine:
 
         # </subroutineDec>
         self.indent_level -= 1
-        self._write_close_tag(SUBROUTINE_DEC)
+        self._write_close_tag("subroutineDec")
 
     def compile_parameter_list(self):
         """compile a jack parameter list which is 0 or more list
         """
         # <parameterList>
-        self._write_open_tag(PARAMETER_LIST)
+        self._write_open_tag("parameterList")
         self.indent_level += 1
 
         # ((type varName) (, type varName)*)?
@@ -388,13 +346,13 @@ class CompilationEngine:
             self._eat(COMMA)
 
         self.indent_level -= 1
-        self._write_close_tag(PARAMETER_LIST)
+        self._write_close_tag("parameterList")
 
     def compile_subroutine_body(self):
         """compile a jack subroutine body which is varDec* statements
         """
         # <subroutineBody>
-        self._write_open_tag(SUBROUTINE_BODY)
+        self._write_open_tag("subroutineBody")
         self.indent_level += 1
 
         # {
@@ -412,13 +370,13 @@ class CompilationEngine:
 
         # </subroutineBody>
         self.indent_level -= 1
-        self._write_close_tag(SUBROUTINE_BODY)
+        self._write_close_tag("subroutineBody")
 
     def compile_var_dec(self):
         """compile jack variable declaration, varDec*, only called if current token is var
         """
         # <varDec>
-        self._write_open_tag(VAR_DEC)
+        self._write_open_tag("varDec")
         self.indent_level += 1
 
         # VAR
@@ -430,14 +388,14 @@ class CompilationEngine:
 
         # </varDec>
         self.indent_level -= 1
-        self._write_close_tag(VAR_DEC)
+        self._write_close_tag("varDec")
 
     def compile_statements(self):
         """
         match the current token value to the matching jack statement
         """
         # <statements>
-        self._write_open_tag(STATEMENTS)
+        self._write_open_tag("statements")
         self.indent_level += 1
 
         while self.current_token.value in [LET, IF, WHILE, DO, RETURN]:
@@ -451,23 +409,31 @@ class CompilationEngine:
 
         # </statements>
         self.indent_level -= 1
-        self._write_close_tag(STATEMENTS)
+        self._write_close_tag("statements")
 
     def compile_let_statement(self):
         """
         compile jack let statement
         """
         # <letStatement>
-        self._write_open_tag(LET_STATEMENT)
+        self._write_open_tag("letStatement")
         self.indent_level += 1
 
-        # let - TODO: confirm its rule, not sure about it
+        # let
         self._write_tag_value(KEYWORD, LET)
         self._eat(LET)
 
         # varName
         self._write_tag_value(IDENTIFIER, self.current_token.value)
         self._eat(IDENTIFIER)
+
+        # ( '[' expression ']')?
+        if self.current_token.value == LEFT_BRACKET:
+            self._write_tag_value(SYMBOL, LEFT_BRACKET)
+            self._eat(LEFT_BRACKET)
+            self.compile_expression()
+            self._write_tag_value(SYMBOL, RIGHT_BRACKET)
+            self._eat(RIGHT_BRACKET)
 
         # =
         self._write_tag_value(SYMBOL, EQUAL_SIGN)
@@ -482,7 +448,7 @@ class CompilationEngine:
 
         # <letStatement>
         self.indent_level -= 1
-        self._write_close_tag(LET_STATEMENT)
+        self._write_close_tag("letStatement")
 
     def compile_if_statement(self):
         """
@@ -490,7 +456,7 @@ class CompilationEngine:
         """
 
         # <ifStatement>
-        self._write_open_tag(IF_STATEMENT)
+        self._write_open_tag("ifStatement")
         self.indent_level += 1
 
         # if
@@ -510,16 +476,16 @@ class CompilationEngine:
 
         # <ifStatement>
         self.indent_level -= 1
-        self._write_close_tag(IF_STATEMENT)
+        self._write_close_tag("ifStatement")
 
     def _handle_expr_or_expr_list_within_paren(self, compile_function):
         # (
-        self._write_tag_value(SYMBOL, self.current_token.value)
+        self._write_tag_value(SYMBOL, LEFT_PAREN)
         self._eat(LEFT_PAREN)
         # compile_expression or compile_expression_list
         compile_function()
         # )
-        self._write_tag_value(SYMBOL, self.current_token.value)
+        self._write_tag_value(SYMBOL, RIGHT_PAREN)
         self._eat(RIGHT_PAREN)
 
     def _handle_statements_within_braces(self):
@@ -539,7 +505,7 @@ class CompilationEngine:
         """
 
         # <whileStatement>
-        self._write_open_tag(WHILE_STATEMENT)
+        self._write_open_tag("whileStatement")
         self.indent_level += 1
 
         # while
@@ -554,7 +520,7 @@ class CompilationEngine:
 
         # <whileStatement>
         self.indent_level -= 1
-        self._write_close_tag(WHILE_STATEMENT)
+        self._write_close_tag("whileStatement")
 
     def compile_do_statement(self):
         """
@@ -562,7 +528,7 @@ class CompilationEngine:
         """
 
         # <doStatement>
-        self._write_open_tag(DO_STATEMENT)
+        self._write_open_tag("doStatement")
         self.indent_level += 1
 
         # do
@@ -588,14 +554,14 @@ class CompilationEngine:
 
         # </doStatement>
         self.indent_level -= 1
-        self._write_close_tag(DO_STATEMENT)
+        self._write_close_tag("doStatement")
 
     def compile_return_statement(self):
         """
         compile jack return statement
         """
         # <returnStatement>
-        self._write_open_tag(RETURN_STATEMENT)
+        self._write_open_tag("returnStatement")
         self.indent_level += 1
 
         # return
@@ -612,7 +578,7 @@ class CompilationEngine:
 
         # </returnStatement>
         self.indent_level -= 1
-        self._write_close_tag(RETURN_STATEMENT)
+        self._write_close_tag("returnStatement")
 
     def compile_expression(self):
         """
@@ -620,15 +586,21 @@ class CompilationEngine:
         """
 
         # <expression>
-        self._write_open_tag(EXPRESSION)
+        self._write_open_tag("expression")
         self.indent_level += 1
 
-        # TODO
+        # term
         self.compile_term()
+
+        # (op term)*
+        while self.current_token.value in OP:
+            self._write_tag_value(SYMBOL, self.current_token.value)
+            self._eat(self.current_token.value)
+            self.compile_term()
 
         # </expression>
         self.indent_level -= 1
-        self._write_close_tag(EXPRESSION)
+        self._write_close_tag("expression")
 
     def compile_term(self):
         """
@@ -636,16 +608,56 @@ class CompilationEngine:
         """
 
         # <term>
-        self._write_open_tag(TERM)
+        self._write_open_tag("term")
         self.indent_level += 1
 
-        # TODO
-        self._write_tag_value(IDENTIFIER, self.current_token.value)
-        self._eat(IDENTIFIER)
+        if self.current_token.type == INT_CONSTANT:
+            self._write_tag_value("integerConstant", self.current_token.value)
+            self._eat(INT_CONSTANT)
+        elif self.current_token.type == STR_CONSTANT:
+            self._write_tag_value("stringConstant", self.current_token.value.strip("\""))
+            self._eat(STR_CONSTANT)
+        elif self.current_token.value in KEYWORD_CONSTANT:
+            self._write_tag_value(KEYWORD, self.current_token.value)
+            self._eat(self.current_token.value)
+        elif self.current_token.value in UNARY_OP:
+            self._write_tag_value(SYMBOL, self.current_token.value)
+            self._eat(self.current_token.value)
+            self.compile_term()
+        elif self.current_token.value == LEFT_PAREN:  # '(' expression ')'
+            self._handle_expr_or_expr_list_within_paren(self.compile_expression)
+        else:  # identifier
+            current_token_value = self.current_token.value
+            self._eat(IDENTIFIER)
+            next_token_value = self.current_token.value
+
+            # varName'[' expression ']'
+            if next_token_value == LEFT_BRACKET:
+                self._write_tag_value(IDENTIFIER, current_token_value)
+                self._write_tag_value(SYMBOL, LEFT_BRACKET)
+                self._eat(LEFT_BRACKET)
+                self.compile_expression()
+                self._write_tag_value(SYMBOL, RIGHT_BRACKET)
+                self._eat(RIGHT_BRACKET)
+            # subroutineCall: foo.bar(expressionList) | Foo.bar(expressionList)
+            elif next_token_value == DOT:
+                self._write_tag_value(IDENTIFIER, current_token_value)
+                self._write_tag_value(SYMBOL, DOT)
+                self._eat(DOT)
+                self._write_tag_value(IDENTIFIER, self.current_token.value)
+                self._eat(IDENTIFIER)
+                self._handle_expr_or_expr_list_within_paren(self.compile_expression_list)
+            # subroutineCall: bar(expressionList)
+            elif next_token_value == LEFT_PAREN:
+                self._write_tag_value(IDENTIFIER, current_token_value)
+                self._handle_expr_or_expr_list_within_paren(self.compile_expression_list)
+            # foo
+            else:
+                self._write_tag_value(IDENTIFIER, current_token_value)
 
         # </term>
         self.indent_level -= 1
-        self._write_close_tag(TERM)
+        self._write_close_tag("term")
 
     def compile_expression_list(self):
         """
@@ -654,7 +666,7 @@ class CompilationEngine:
         # TODO: confirm it needs ( and )
 
         # <expressionList>
-        self._write_open_tag(EXPRESSION_LIST)
+        self._write_open_tag("expressionList")
         self.indent_level += 1
 
         # (expression (',' expression)*)?
@@ -668,7 +680,7 @@ class CompilationEngine:
 
         # </expressionList>
         self.indent_level -= 1
-        self._write_close_tag(EXPRESSION_LIST)
+        self._write_close_tag("expressionList")
 
 
 if __name__ == "__main__":
@@ -678,17 +690,20 @@ if __name__ == "__main__":
     inFilePath = sys.argv[1]
 
     def handle_file(path):
+        print(f"Parsing {path}")
         out_file_path = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
         with open(path) as inFileStream:
             with open(out_file_path, "w") as outFileStream:
-                tokens_stream = JackTokenizer(inFileStream).start_tokenizer()
+                tokens_stream = JackTokenizer(inFileStream.read()).start_tokenizer()
                 compilation_engine = CompilationEngine(tokens_stream, outFileStream)
                 compilation_engine.compile_class()
 
+
     def handle_dir(path):
-        for f in os.listdir():
+        for f in os.listdir(path):
             if f.endswith(IN_FILE_EXT):
-                handle_file(path + NEWLINE + f)
+                handle_file(os.path.join(path, f))
+
 
     if os.path.isfile(inFilePath):
         handle_file(inFilePath)
