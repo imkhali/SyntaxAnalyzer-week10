@@ -4,14 +4,6 @@ import sys
 from typing import NamedTuple
 
 # TODO: refactor, one thing, see if _eat can be called before handling the lexical
-TERM = "term"
-EXPRESSION = "expression"
-EXPRESSION_LIST = "expressionList"
-RETURN_STATEMENT = "returnStatement"
-DO_STATEMENT = "doStatement"
-WHILE_STATEMENT = "whileStatement"
-IF_STATEMENT = "ifStatement"
-LET_STATEMENT = "letStatement"
 
 IN_FILE_EXT = ".jack"
 OUT_FILE_EXT = "_test.xml"
@@ -72,6 +64,14 @@ PARAMETER_LIST = "parameterList"
 SUBROUTINE_BODY = "subroutineBody"
 VAR_DEC = "varDec"
 STATEMENTS = "statements"
+TERM = "term"
+EXPRESSION = "expression"
+EXPRESSION_LIST = "expressionList"
+RETURN_STATEMENT = "returnStatement"
+DO_STATEMENT = "doStatement"
+WHILE_STATEMENT = "whileStatement"
+IF_STATEMENT = "ifStatement"
+LET_STATEMENT = "letStatement"
 
 
 class ParseException(Exception):
@@ -623,6 +623,7 @@ class CompilationEngine:
         self._write_open_tag(EXPRESSION)
         self.indent_level += 1
 
+        # TODO
         self.compile_term()
 
         # </expression>
@@ -638,6 +639,7 @@ class CompilationEngine:
         self._write_open_tag(TERM)
         self.indent_level += 1
 
+        # TODO
         self._write_tag_value(IDENTIFIER, self.current_token.value)
         self._eat(IDENTIFIER)
 
@@ -675,10 +677,6 @@ if __name__ == "__main__":
         sys.exit(1)
     inFilePath = sys.argv[1]
 
-
-    # inFilePath = r"C:\Users\khalil\OneDrive - Deakin University\PhD " \
-    #             r"Project\Programming\CSDegree\019_020_NAND_TETRIS\projects\10\ArrayTest\Temp.jack "
-
     def handle_file(path):
         out_file_path = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
         with open(path) as inFileStream:
@@ -687,12 +685,10 @@ if __name__ == "__main__":
                 compilation_engine = CompilationEngine(tokens_stream, outFileStream)
                 compilation_engine.compile_class()
 
-
     def handle_dir(path):
         for f in os.listdir():
             if f.endswith(IN_FILE_EXT):
                 handle_file(path + NEWLINE + f)
-
 
     if os.path.isfile(inFilePath):
         handle_file(inFilePath)
