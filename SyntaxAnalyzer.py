@@ -692,31 +692,36 @@ class CompilationEngine:
         self._write_close_tag('expressionList')
 
 
+def handle_file(path):
+    print(f'Parsing {path}')
+    out_file_path = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
+    with open(path) as inFileStream:
+        with open(out_file_path, 'w') as outFileStream:
+            tokens_stream = JackTokenizer(inFileStream.read()).start_tokenizer()
+            compilation_engine = CompilationEngine(tokens_stream, outFileStream)
+            compilation_engine.compile_class()
+
+
+def handle_dir(path):
+    for f in os.listdir(path):
+        if f.endswith(IN_FILE_EXT):
+            handle_file(os.path.join(path, f))
+
+
+def main(args=None):
+    if args is None:
+        args = sys.argv[1:]
+
+    for file in args:
+        if os.path.isfile(file):
+            handle_file(file)
+        elif os.path.isdir(file):
+            handle_dir(file)
+        else:
+            print('Usage: SyntaxAnalyzer.py <path-to-jack-file-or-directory-of-source-code>')
+            return 1
+    return 0
+
+
 if __name__ == '__main__':
-    def handle_file(path):
-        print(f'Parsing {path}')
-        out_file_path = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
-        with open(path) as inFileStream:
-            with open(out_file_path, 'w') as outFileStream:
-                tokens_stream = JackTokenizer(inFileStream.read()).start_tokenizer()
-                compilation_engine = CompilationEngine(tokens_stream, outFileStream)
-                compilation_engine.compile_class()
-
-    def handle_dir(path):
-        for f in os.listdir(path):
-            if f.endswith(IN_FILE_EXT):
-                handle_file(os.path.join(path, f))
-
-    if len(sys.argv) != 2:
-        print('Usage: SyntaxAnalyzer.py <path-to-jack-file-or-directory-of-source-code>')
-        sys.exit(1)
-    inFilePath = sys.argv[1]
-
-    if os.path.isfile(inFilePath):
-        handle_file(inFilePath)
-    elif os.path.isdir(inFilePath):
-        handle_dir(inFilePath)
-    else:
-        raise RuntimeError(
-            f'I/O Error, make sure to provide a valid file' 
-            f'.jack or directory name that has .jack source code')
+    sys.exit(main())
