@@ -2,6 +2,7 @@ import os
 import re
 import sys
 from typing import NamedTuple
+import logging
 
 # TODO: refactor, one thing, see if _eat can be called before handling the lexical
 # TODO: add exceptions everywhere, so far assumed syntactically correct jack source code
@@ -672,8 +673,6 @@ class CompilationEngine:
         """
         compile jack expression list
         """
-        # TODO: confirm it needs ( and )
-
         # <expressionList>
         self._write_open_tag('expressionList')
         self.reindent()
@@ -693,7 +692,7 @@ class CompilationEngine:
 
 
 def handle_file(path):
-    print(f'Parsing {path}')
+    logging.info(f'Parsing {path}')
     out_file_path = path.replace(IN_FILE_EXT, OUT_FILE_EXT)
     with open(path) as inFileStream:
         with open(out_file_path, 'w') as outFileStream:
@@ -711,6 +710,8 @@ def handle_dir(path):
 def main(args=None):
     if args is None:
         args = sys.argv[1:]
+        if not args:
+            logging.error('Usage: SyntaxAnalyzer.py <path-to-jack-file-or-directory-of-source-code>')
 
     for file in args:
         if os.path.isfile(file):
@@ -718,10 +719,14 @@ def main(args=None):
         elif os.path.isdir(file):
             handle_dir(file)
         else:
-            print('Usage: SyntaxAnalyzer.py <path-to-jack-file-or-directory-of-source-code>')
+            logging.error(f'{", ".join(args)} are not jack source files')
             return 1
     return 0
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='[%(levelname)s] %(message)s',
+    )
     sys.exit(main())
