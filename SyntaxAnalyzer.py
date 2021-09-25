@@ -78,18 +78,18 @@ class Token(NamedTuple):
 
 
 class JackTokenizer:
+    KEYWORDS = {
+        'class', 'constructor', 'function',
+        'method', 'field', 'static', 'var', 'int',
+        'char', 'boolean', 'void', 'true', 'false',
+        'null', 'this', 'let', 'do', 'if', 'else',
+        'while', 'return'
+    }
     # Note, order of these specifications matter
     tokens_specifications = {
         'comment': r'//.*|/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/',
         'space': r'[ \t]+',
         'newline': r'\n',
-        KEYWORD: '|'.join([
-            'class', 'constructor', 'function',
-            'method', 'field', 'static', 'var', 'int',
-            'char', 'boolean', 'void', 'true', 'false',
-            'null', 'this', 'let', 'do', 'if', 'else',
-            'while', 'return'
-        ]),
         SYMBOL: '|'.join([
             r'\{', r'\}', r'\(', r'\)', r'\[', r'\]', r'\.',
             r'\,', r'\;', r'\+', r'\-', r'\*', r'\/', r'\&',
@@ -116,6 +116,8 @@ class JackTokenizer:
             token_value = m.group(token_type)
             if token_type == 'integerConstant':
                 token_value = int(token_value)
+            elif token_type == IDENTIFIER and token_value in self.KEYWORDS:
+                token_type = KEYWORD
             elif token_type == 'newline':
                 line_number += 1
                 continue
