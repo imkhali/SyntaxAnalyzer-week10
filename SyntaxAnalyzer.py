@@ -110,7 +110,7 @@ class JackTokenizer:
         self.in_stream = in_stream
 
     def start_tokenizer(self):
-        line_number = 0
+        line_number = 1
         for m in self.jack_token.finditer(self.in_stream):
             token_type = m.lastgroup
             token_value = m.group(token_type)
